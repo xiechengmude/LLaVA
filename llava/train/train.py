@@ -637,6 +637,18 @@ class LazySupervisedDataset(Dataset):
         self.list_data_dict = list_data_dict
         self.data_args = data_args
 
+        #add default
+        self.default_data = self.load_default_data('/workspace/LLaVA/playground/data/ShareGPT4V/share-captioner_coco_lcs_sam_1246k_1107.json')
+
+    def load_default_data(self, path):
+        with open(path, 'r') as file:
+            data = json.load(file)
+            # 查找指定的默认图像和对话内容
+            for item in data:
+                if item['id'] == 'sa_201161':
+                    return item
+            return None  # 如果没有找到指定的项，返回 None
+        
     def __len__(self):
         return len(self.list_data_dict)
 
@@ -665,8 +677,23 @@ class LazySupervisedDataset(Dataset):
         if 'image' in sources[0]:
             image_file = self.list_data_dict[i]['image']
             image_folder = self.data_args.image_folder
+            #print(f"Processing image: {os.path.join(image_folder, image_file)}")  # 添加这一行
             processor = self.data_args.image_processor
+
+        ## Load default image when error.
+        try:
             image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
+            # ... [图像处理的其余部分] ...
+        except OSError as e:
+            logging.error(f"Error loading image {os.path.join(image_folder, image_file)}: {e}")
+            print(f"Error image: {os.path.join(image_folder, image_file)}")  #
+            # 这里可以选择返回一个默认图像 
+            if self.default_data:
+                # 使用默认图像和对话
+                default_image_path = os.path.join(image_folder, self.default_data['image'])
+                image = Image.open(default_image_path).convert('RGB')
+                sources = [self.default_data]  # 使用默认的对话内容
+
             if self.data_args.image_aspect_ratio == 'pad':
                 def expand2square(pil_img, background_color):
                     width, height = pil_img.size
