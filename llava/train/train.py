@@ -681,18 +681,20 @@ class LazySupervisedDataset(Dataset):
             processor = self.data_args.image_processor
 
         ## Load default image when error.
-        try:
-            image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
-            # ... [图像处理的其余部分] ...
-        except OSError as e:
-            logging.error(f"Error loading image {os.path.join(image_folder, image_file)}: {e}")
-            print(f"Error image: {os.path.join(image_folder, image_file)}")  #
-            # 这里可以选择返回一个默认图像 
-            if self.default_data:
-                # 使用默认图像和对话
-                default_image_path = os.path.join(image_folder, self.default_data['image'])
-                image = Image.open(default_image_path).convert('RGB')
-                sources = [self.default_data]  # 使用默认的对话内容
+        #/workspace/LLaVA/playground/data/sam/images/sa_545504.jpg
+        #
+            try:
+                image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
+                # ... [图像处理的其余部分] ...
+            except OSError as e:
+                logging.error(f"Error loading image {os.path.join(image_folder, image_file)}: {e}")
+                print(f"Error image: {os.path.join(image_folder, image_file)}")  #
+                # 这里可以选择返回一个默认图像 
+                if self.default_data:
+                    # 使用默认图像和对话
+                    default_image_path = os.path.join(image_folder, self.default_data['image'])
+                    image = Image.open(default_image_path).convert('RGB')
+                    sources = [self.default_data]  # 使用默认的对话内容
 
             if self.data_args.image_aspect_ratio == 'pad':
                 def expand2square(pil_img, background_color):
