@@ -511,11 +511,11 @@ def debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_ima
         tokenized_conversation.extend(tokenized_rou)
         calculated_len += len(tokenized_rou)
 
-    print("\nTokenized Target:")
+    print("\n<<<<<<<<<<<<<<<<<<<<<<<<<<Tokenized Target:")
     tokenized_target = target[target != IGNORE_INDEX].tolist()
     print(tokenized_target)
 
-    print("\nMissing Tokens:")
+    print("<<<<<<<<<<<<<<<<<<<<<<<<<<\nMissing Tokens:")
     missing_tokens = []
     conv_idx = 0
     for i, token in enumerate(tokenized_target):
@@ -526,14 +526,14 @@ def debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_ima
 
     if missing_tokens:
         for idx, token in missing_tokens:
-            print(f"Position: {idx}, Token: {token} ({tokenizer.decode([token])})")
+            print(f"<<<<<<<<<<<<<<<<<<<<<<<<<<Position: {idx}, Token: {token} ({tokenizer.decode([token])})")
     else:
         print("No missing tokens found.")
 
     if calculated_len != total_len:
-        print(f"\nLength mismatch detected. Calculated: {calculated_len}, Actual: {total_len}")
+        print(f"\n<<<<<<<<<<<<<<<<<<<<<<<<<<Length mismatch detected. Calculated: {calculated_len}, Actual: {total_len}")
     else:
-        print(f"\nLengths match. Length: {calculated_len}")
+        print(f"\n<<<<<<<<<<<<<<<<<<<<<<<<<<Lengths match. Length: {calculated_len}")
 
 def preprocess_xdan_l2(
     sources,
@@ -707,7 +707,7 @@ def preprocess_mpt(
 
             cur_len += round_len
         target[cur_len:] = IGNORE_INDEX
-
+        print("Start to debug_34b_tokenization_length: \n\n")
         debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_image)
 
         if cur_len < tokenizer.model_max_length:
