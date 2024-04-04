@@ -50,9 +50,20 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         if 'lora' in model_name.lower() and model_base is None:
             warnings.warn('There is `lora` in model name but no `model_base` is provided. If you are loading a LoRA model, please provide the `model_base` argument. Detailed instruction: https://github.com/haotian-liu/LLaVA#launch-a-model-worker-lora-weights-unmerged.')
         if 'lora' in model_name.lower() and model_base is not None:
-            from llava.model.language_model.llava_llama import LlavaConfig
-            lora_cfg_pretrained = LlavaConfig.from_pretrained(model_path)
-            tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
+            # from llava.model.language_model.llava_llama import LlavaConfig
+            # lora_cfg_pretrained = LlavaConfig.from_pretrained(model_path)
+            # tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
+            if 'mistral' in model_name.lower():
+                from llava.model.language_model.llava_mistral import LlavaMistralConfig
+                lora_cfg_pretrained = LlavaMistralConfig.from_pretrained(model_path)
+                tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
+                model = LlavaMistralForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
+
+            else:
+                from llava.model.language_model.llava_llama import LlavaConfig
+                lora_cfg_pretrained = LlavaConfig.from_pretrained(model_path)
+                tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
+                model = LlavaLlamaForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
             print('Loading LLaVA from base model...')
             model = LlavaLlamaForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
             token_num, tokem_dim = model.lm_head.out_features, model.lm_head.in_features
@@ -93,6 +104,10 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                 tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=True)
                 cfg_pretrained = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
                 model = LlavaMptForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=cfg_pretrained, **kwargs)
+            elif 'mistral' in model_name.lower():
+                tokenizer = AutoTokenizer.from_pretrained(model_base)
+                cfg_pretrained = AutoConfig.from_pretrained(model_path)
+                model = LlavaMistralForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=cfg_pretrained, **kwargs)
             else:
                 tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False)
                 cfg_pretrained = AutoConfig.from_pretrained(model_path)

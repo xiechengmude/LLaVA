@@ -33,7 +33,7 @@ from llava.train.llava_trainer import LLaVATrainer
 
 from llava import conversation as conversation_lib
 from llava.model import *
-from llava.mm_utils import tokenizer_image_token
+from llava.mm_utils import tokenizer_image_token, train_process_images
 
 from PIL import Image
 
@@ -73,7 +73,7 @@ class DataArguments:
     lazy_preprocess: bool = False
     is_multimodal: bool = False
     image_folder: Optional[str] = field(default=None)
-    image_aspect_ratio: str = 'square'
+    image_aspect_ratio: str = 'anyres'
 
 
 @dataclass
@@ -495,6 +495,45 @@ def preprocess_v1(
         input_ids=input_ids,
         labels=targets,
     )
+def debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_image):
+    total_len = int(target.ne(tokenizer.pad_token_id).sum())
+    calculated_len = 0
+
+    rounds = conversation.split(conv.sep)
+    print("Tokenized Conversation:")
+    tokenized_conversation = []
+    for rou in rounds:
+        if has_image:
+            tokenized_rou = tokenizer_image_token(rou, tokenizer)
+        else:
+            tokenized_rou = tokenizer.encode(rou, add_special_tokens=False)
+        print(tokenized_rou)
+        tokenized_conversation.extend(tokenized_rou)
+        calculated_len += len(tokenized_rou)
+
+    print("\nTokenized Target:")
+    tokenized_target = target[target != IGNORE_INDEX].tolist()
+    print(tokenized_target)
+
+    print("\nMissing Tokens:")
+    missing_tokens = []
+    conv_idx = 0
+    for i, token in enumerate(tokenized_target):
+        if conv_idx >= len(tokenized_conversation) or token != tokenized_conversation[conv_idx]:
+            missing_tokens.append((i, token))
+        else:
+            conv_idx += 1
+
+    if missing_tokens:
+        for idx, token in missing_tokens:
+            print(f"Position: {idx}, Token: {token} ({tokenizer.decode([token])})")
+    else:
+        print("No missing tokens found.")
+
+    if calculated_len != total_len:
+        print(f"\nLength mismatch detected. Calculated: {calculated_len}, Actual: {total_len}")
+    else:
+        print(f"\nLengths match. Length: {calculated_len}")
 
 
 def preprocess_mpt(
@@ -505,11 +544,9 @@ def preprocess_mpt(
     conv = conversation_lib.default_conversation.copy()
     roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
-    # Apply prompt templates
     conversations = []
     for i, source in enumerate(sources):
         if roles[source[0]["from"]] != conv.roles[0]:
-            # Skip the first one if it is not from human
             source = source[1:]
 
         conv.messages = []
@@ -520,9 +557,11 @@ def preprocess_mpt(
         conversations.append(conv.get_prompt())
 
     # Tokenize conversations
+    #print(conv.get_prompt())
 
     if has_image:
-        input_ids = torch.stack([tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+        #input_ids = torch.stack([tokenizer_image_token(prompt, tokenizer, return_tensors='pt') for prompt in conversations], dim=0)
+        input_ids = torch.stack([tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt') for prompt in conversations], dim=0)
     else:
         input_ids = tokenizer(
             conversations,
@@ -539,7 +578,8 @@ def preprocess_mpt(
     sep = conv.sep + conv.roles[1]
     for conversation, target in zip(conversations, targets):
         total_len = int(target.ne(tokenizer.pad_token_id).sum())
-
+        #print("target: ", target)
+        #print("conversation: ", conversation)
         rounds = conversation.split(conv.sep)
         re_rounds = [conv.sep.join(rounds[:3])] # system + user + gpt
         for conv_idx in range(3, len(rounds), 2):
@@ -554,6 +594,7 @@ def preprocess_mpt(
             if len(parts) != 2:
                 break
             parts[0] += sep
+            #print("parts ", parts)
 
             if has_image:
                 round_len = len(tokenizer_image_token(rou, tokenizer))
@@ -562,7 +603,9 @@ def preprocess_mpt(
                 round_len = len(tokenizer(rou).input_ids)
                 instruction_len = len(tokenizer(parts[0]).input_ids) - 1
 
-            if i != 0 and getattr(tokenizer, 'legacy', False) and IS_TOKENIZER_GREATER_THAN_0_14:
+            #if i != 0 and getattr(tokenizer, 'legacy', False) and IS_TOKENIZER_GREATER_THAN_0_14:
+            if getattr(tokenizer, 'legacy', False) and IS_TOKENIZER_GREATER_THAN_0_14:
+                #print("yes")
                 round_len += 1
                 instruction_len += 1
 
@@ -570,6 +613,8 @@ def preprocess_mpt(
 
             cur_len += round_len
         target[cur_len:] = IGNORE_INDEX
+
+        # debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_image)
 
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
@@ -756,7 +801,8 @@ class LazySupervisedDataset(Dataset):
 
     def __init__(self, data_path: str,
                  tokenizer: transformers.PreTrainedTokenizer,
-                 data_args: DataArguments):
+                 data_args: DataArguments,
+                 model_config):
         super(LazySupervisedDataset, self).__init__()
         list_data_dict = json.load(open(data_path, "r"))
 
@@ -764,7 +810,7 @@ class LazySupervisedDataset(Dataset):
         self.tokenizer = tokenizer
         self.list_data_dict = list_data_dict
         self.data_args = data_args
-
+        self.model_config = model_config
         #add default
         self.default_data = self.load_default_data('/workspace/LLaVA/playground/data/ShareGPT4V/share-captioner_coco_lcs_sam_1246k_1107.json')
 
@@ -813,6 +859,7 @@ class LazySupervisedDataset(Dataset):
         #
             try:
                 image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
+                image_size = image.size
                 # ... [图像处理的其余部分] ...
             except OSError as e:
                 logging.error(f"Error loading image {os.path.join(image_folder, image_file)}: {e}")
@@ -823,6 +870,7 @@ class LazySupervisedDataset(Dataset):
                     default_image_path = os.path.join(image_folder, self.default_data['image'])
                     image = Image.open(default_image_path).convert('RGB')
                     sources = [self.default_data]  # 使用默认的对话内容
+
 
             if self.data_args.image_aspect_ratio == 'pad':
                 def expand2square(pil_img, background_color):
@@ -839,6 +887,8 @@ class LazySupervisedDataset(Dataset):
                         return result
                 image = expand2square(image, tuple(int(x*255) for x in processor.image_mean))
                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+            elif self.data_args.image_aspect_ratio == 'anyres':
+                image = train_process_images(image, processor, self.model_config)
             else:
                 image = processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
             sources = preprocess_multimodal(
@@ -857,6 +907,7 @@ class LazySupervisedDataset(Dataset):
         # image exist in the data
         if 'image' in self.list_data_dict[i]:
             data_dict['image'] = image
+            data_dict['image_size'] = image_size 
         elif self.data_args.is_multimodal:
             # image does not exist in the data, but the model is multimodal
             crop_size = self.data_args.image_processor.crop_size
@@ -890,20 +941,24 @@ class DataCollatorForSupervisedDataset(object):
 
         if 'image' in instances[0]:
             images = [instance['image'] for instance in instances]
+            image_sizes = [instance['image_size'] for instance in instances]
             if all(x is not None and x.shape == images[0].shape for x in images):
                 batch['images'] = torch.stack(images)
             else:
                 batch['images'] = images
+            batch['image_sizes'] = image_sizes
 
         return batch
 
 
 def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer,
-                                data_args) -> Dict:
+                                data_args,
+                                model_config) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
     train_dataset = LazySupervisedDataset(tokenizer=tokenizer,
                                 data_path=data_args.data_path,
-                                data_args=data_args)
+                                data_args=data_args, 
+                                model_config=model_config)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset,
                 eval_dataset=None,
@@ -948,6 +1003,14 @@ def train(attn_implementation=None):
                 cache_dir=training_args.cache_dir,
                 **bnb_model_from_pretrained_args
             )
+        elif 'mistral' in model_args.model_name_or_path.lower():
+            model = LlavaMistralForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                cache_dir=training_args.cache_dir,
+                attn_implementation=attn_implementation,
+                torch_dtype=(torch.bfloat16 if training_args.bf16 else torch.float16),
+                **bnb_model_from_pretrained_args
+            )
         else:
             model = LlavaLlamaForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
@@ -962,6 +1025,7 @@ def train(attn_implementation=None):
             cache_dir=training_args.cache_dir,
             attn_implementation=attn_implementation,
             torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
+            torch_dtype=(torch.bfloat16 if training_args.bf16 else torch.float16),
             **bnb_model_from_pretrained_args
         )
     model.config.use_cache = False
@@ -1080,9 +1144,12 @@ def train(attn_implementation=None):
                 if hasattr(module, 'weight'):
                     if training_args.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
+    
+    model.resize_token_embeddings(len(tokenizer))
 
     data_module = make_supervised_data_module(tokenizer=tokenizer,
-                                              data_args=data_args)
+                                              data_args=data_args,
+                                              model_config=model.config)
     trainer = LLaVATrainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,
