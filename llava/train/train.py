@@ -614,7 +614,7 @@ def preprocess_mpt(
             cur_len += round_len
         target[cur_len:] = IGNORE_INDEX
 
-        # debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_image)
+        debug_34b_tokenization_length(conversation, target, tokenizer, conv, has_image)
 
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
