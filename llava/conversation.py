@@ -401,18 +401,27 @@ conv_qwen_2 = Conversation(
     sep=" ",
     sep2="<|endoftext|>",
 )
+# conv_xdan_l2 = Conversation(
+#     system="A chat between a curious user and an artificial intelligence assistant. "
+#     "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+#     roles=("USER", "ASSISTANT"),
+#     version="xdan_l2",
+#     messages=(),
+#     offset=0,
+#     sep_style=SeparatorStyle.xDAN_l2,
+#     sep=" ",
+#     sep2="<|im_end|>",
+# )
 conv_xdan_l2 = Conversation(
-    system="A chat between a curious user and an artificial intelligence assistant. "
-    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
-    roles=("USER", "ASSISTANT"),
+    system="""<|im_start|>system
+A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.""",
+    roles=("<|im_start|>user\n", "<|im_start|>assistant\n"),
     version="xdan_l2",
     messages=(),
     offset=0,
     sep_style=SeparatorStyle.xDAN_l2,
-    sep=" ",
-    sep2="<|im_end|>",
+    sep="<|im_end|>",
 )
-
 default_conversation = conv_vicuna_v1
 conv_templates = {
     "default": conv_vicuna_v0,
