@@ -862,6 +862,8 @@ def preprocess(
         return preprocess_mpt(sources, tokenizer, has_image=has_image)
     if conversation_lib.default_conversation.version == "qwen_v2":
         return preprocess_qwen_2(sources, tokenizer, has_image=has_image)
+    if conversation_lib.default_conversation.version == "xdan_l2":
+        return preprocess_qwen_2(sources, tokenizer, has_image=has_image)
     # add end signal and concatenate together
     conversations = []
     for source in sources:
