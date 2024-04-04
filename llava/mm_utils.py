@@ -181,6 +181,10 @@ def process_images(images, image_processor, model_cfg):
         new_images = torch.stack(new_images, dim=0)
     return new_images
 
+#Anyres compatible fine-tuning of llava-1.6
+def train_process_images(images, image_processor, model_cfg):
+    new_image = process_anyres_image(images, image_processor, model_cfg.image_grid_pinpoints)
+    return new_image
 
 def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
     prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split('<image>')]
